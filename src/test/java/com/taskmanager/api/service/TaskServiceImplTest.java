@@ -1,20 +1,20 @@
 package com.taskmanager.api.service;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.taskmanager.api.dto.TaskRequest;
+import com.taskmanager.api.dto.TaskResponse;
 import com.taskmanager.api.entity.Task;
 import com.taskmanager.api.entity.TaskPriority;
 import com.taskmanager.api.entity.TaskStatus;
@@ -30,138 +30,113 @@ class TaskServiceImplTest {
     @InjectMocks
     private TaskServiceImpl taskService;
 
-    // Helper method to create a sample task
-    private Task createSampleTask() {
-        Task task = new Task();
+    private TaskRequest request;
+    private Task task;
+
+    @BeforeEach
+    void setUp() {
+
+        request = new TaskRequest();
+        request.setTitle("Learn Spring Boot");
+        request.setDescription("Complete Task Manager project");
+        request.setStatus(TaskStatus.TODO);
+        request.setPriority(TaskPriority.HIGH);
+
+        task = new Task();
         task.setId(1L);
         task.setTitle("Learn Spring Boot");
-        task.setDescription("Practice unit testing");
+        task.setDescription("Complete Task Manager project");
         task.setStatus(TaskStatus.TODO);
         task.setPriority(TaskPriority.HIGH);
-        return task;
     }
 
     @Test
-    void createTask_ShouldSaveTask() {
-        Task task = createSampleTask();
+    void createTask_shouldReturnTaskResponse() {
 
-        when(taskRepository.save(task)).thenReturn(task);
+        when(taskRepository.save(any(Task.class))).thenReturn(task);
 
-        Task result = taskService.createTask(task);
+        TaskResponse response = taskService.createTask(request);
 
-        assertEquals("Learn Spring Boot", result.getTitle());
-        assertEquals(1L, result.getId());
-        verify(taskRepository).save(task);
+        assertNotNull(response);
+        assertEquals(1L, response.getId());
+        assertEquals("Learn Spring Boot", response.getTitle());
+
+        verify(taskRepository, times(1)).save(any(Task.class));
     }
 
     @Test
-    void createTask_ShouldThrowException_WhenTitleIsNull() {
-        Task task = createSampleTask();
-        task.setTitle(null);
+    void getAllTasks_shouldReturnTaskList() {
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> taskService.createTask(task));
+        when(taskRepository.findAll()).thenReturn(List.of(task));
 
-        assertEquals("Task title is required", exception.getMessage());
+        List<TaskResponse> response = taskService.getAllTasks();
+
+        assertEquals(1, response.size());
+        assertEquals("Learn Spring Boot", response.get(0).getTitle());
     }
 
     @Test
-    void getAllTasks_ShouldReturnTaskList() {
-        List<Task> tasks = List.of(createSampleTask());
+    void getTaskById_shouldReturnTaskResponse() {
 
-        when(taskRepository.findAll()).thenReturn(tasks);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
 
-        List<Task> result = taskService.getAllTasks();
+        TaskResponse response = taskService.getTaskById(1L);
 
-        assertEquals(1, result.size());
-        assertEquals("Learn Spring Boot", result.get(0).getTitle());
-        verify(taskRepository).findAll();
+        assertNotNull(response);
+        assertEquals(1L, response.getId());
     }
 
     @Test
-    void getTaskById_ShouldReturnTask_WhenTaskExists() {
-        Task task = createSampleTask();
+    void getTaskById_shouldThrowExceptionWhenTaskNotFound() {
 
-        when(taskRepository.findById(1L))
-                .thenReturn(Optional.of(task));
+        when(taskRepository.findById(99L)).thenReturn(Optional.empty());
 
-        Task result = taskService.getTaskById(1L);
-
-        assertEquals(1L, result.getId());
-        assertEquals("Learn Spring Boot", result.getTitle());
+        assertThrows(TaskNotFoundException.class,
+                () -> taskService.getTaskById(99L));
     }
 
     @Test
-    void getTaskById_ShouldThrowException_WhenTaskDoesNotExist() {
-        when(taskRepository.findById(999L))
-                .thenReturn(Optional.empty());
+    void updateTask_shouldReturnUpdatedTaskResponse() {
 
-        TaskNotFoundException exception = assertThrows(
-                TaskNotFoundException.class,
-                () -> taskService.getTaskById(999L));
+        request.setTitle("Learn Microservices");
 
-        assertEquals("Task not found with id: 999", exception.getMessage());
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        TaskResponse response = taskService.updateTask(1L, request);
+
+        assertEquals("Learn Microservices", response.getTitle());
+
+        verify(taskRepository).save(any(Task.class));
     }
 
     @Test
-    void updateTask_ShouldUpdateExistingTask() {
-        Task existingTask = createSampleTask();
+    void updateTask_shouldThrowExceptionWhenTaskNotFound() {
 
-        Task updatedTask = new Task();
-        updatedTask.setTitle("Learn Advanced Spring Boot");
-        updatedTask.setDescription("Practice Mockito");
-        updatedTask.setStatus(TaskStatus.INPROGRESS);
-        updatedTask.setPriority(TaskPriority.HIGH);
+        when(taskRepository.findById(99L)).thenReturn(Optional.empty());
 
-        when(taskRepository.findById(1L))
-                .thenReturn(Optional.of(existingTask));
-
-        when(taskRepository.save(existingTask))
-                .thenReturn(existingTask);
-
-        Task result = taskService.updateTask(1L, updatedTask);
-
-        assertEquals("Learn Advanced Spring Boot", result.getTitle());
-        assertEquals("Practice Mockito", result.getDescription());
-        assertEquals(TaskStatus.INPROGRESS, result.getStatus());
-
-        verify(taskRepository).save(existingTask);
+        assertThrows(TaskNotFoundException.class,
+                () -> taskService.updateTask(99L, request));
     }
 
     @Test
-    void updateTask_ShouldThrowException_WhenTaskDoesNotExist() {
-        Task updatedTask = createSampleTask();
+    void deleteTask_shouldDeleteTaskSuccessfully() {
 
-        when(taskRepository.findById(999L))
-                .thenReturn(Optional.empty());
-
-        assertThrows(
-                TaskNotFoundException.class,
-                () -> taskService.updateTask(999L, updatedTask));
-    }
-
-    @Test
-    void deleteTask_ShouldDeleteExistingTask() {
-        Task task = createSampleTask();
-
-        when(taskRepository.findById(1L))
-                .thenReturn(Optional.of(task));
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
 
         taskService.deleteTask(1L);
 
-        verify(taskRepository).delete(task);
+        verify(taskRepository, times(1)).delete(task);
     }
 
     @Test
-    void deleteTask_ShouldThrowException_WhenTaskDoesNotExist() {
-        when(taskRepository.findById(999L))
-                .thenReturn(Optional.empty());
+    void deleteTask_shouldThrowExceptionWhenTaskNotFound() {
 
-        TaskNotFoundException exception = assertThrows(
-                TaskNotFoundException.class,
-                () -> taskService.deleteTask(999L));
+        when(taskRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertTrue(exception.getMessage().contains("999"));
+        assertThrows(TaskNotFoundException.class,
+                () -> taskService.deleteTask(99L));
+
+        verify(taskRepository, never()).delete(any(Task.class));
     }
 }

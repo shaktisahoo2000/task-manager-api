@@ -5,6 +5,8 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.taskmanager.api.dto.TaskRequest;
+import com.taskmanager.api.dto.TaskResponse;
 import com.taskmanager.api.entity.Task;
 import com.taskmanager.api.exception.TaskNotFoundException;
 import com.taskmanager.api.repository.TaskRepository;
@@ -19,57 +21,82 @@ public class TaskServiceImpl implements TaskService {
         this.taskRepository = taskRepository;
     }
 
-    // Create a new task
     @Override
-    public Task createTask(Task task) {
+    public TaskResponse createTask(TaskRequest request) {
 
-        if (task.getTitle() == null || task.getTitle().isBlank()) {
-            throw new IllegalArgumentException("Task title is required");
-        }
+        Task task = new Task();
 
-        return taskRepository.save(task);
+        task.setTitle(request.getTitle());
+        task.setDescription(request.getDescription());
+        task.setStatus(request.getStatus());
+        task.setPriority(request.getPriority());
+
+        Task savedTask = taskRepository.save(task);
+
+        return convertToResponse(savedTask);
     }
 
-    // Retrieve all tasks
     @Override
     @Transactional(readOnly = true)
-    public List<Task> getAllTasks() {
-        return taskRepository.findAll();
+    public List<TaskResponse> getAllTasks() {
+
+        return taskRepository.findAll()
+                .stream()
+                .map(this::convertToResponse)
+                .toList();
     }
 
-    // Retrieve a task by ID
     @Override
     @Transactional(readOnly = true)
-    public Task getTaskById(Long id) {
+    public TaskResponse getTaskById(Long id) {
 
-        return taskRepository.findById(id)
+        Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new TaskNotFoundException(
                         "Task not found with id: " + id));
+
+        return convertToResponse(task);
     }
 
-    // Update an existing task
     @Override
-    public Task updateTask(Long id, Task task) {
+    public TaskResponse updateTask(Long id, TaskRequest request) {
 
-        if (task.getTitle() == null || task.getTitle().isBlank()) {
-            throw new IllegalArgumentException("Task title is required");
-        }
+        Task existingTask = taskRepository.findById(id)
+                .orElseThrow(() -> new TaskNotFoundException(
+                        "Task not found with id: " + id));
 
-        Task existingTask = getTaskById(id);
+        existingTask.setTitle(request.getTitle());
+        existingTask.setDescription(request.getDescription());
+        existingTask.setStatus(request.getStatus());
+        existingTask.setPriority(request.getPriority());
 
-        existingTask.setTitle(task.getTitle());
-        existingTask.setDescription(task.getDescription());
-        existingTask.setStatus(task.getStatus());
-        existingTask.setPriority(task.getPriority());
+        Task updatedTask = taskRepository.save(existingTask);
 
-        return taskRepository.save(existingTask);
+        return convertToResponse(updatedTask);
     }
 
-    // Delete a task
     @Override
     public void deleteTask(Long id) {
 
-        Task existingTask = getTaskById(id);
+        Task existingTask = taskRepository.findById(id)
+                .orElseThrow(() -> new TaskNotFoundException(
+                        "Task not found with id: " + id));
+
         taskRepository.delete(existingTask);
+    }
+
+    // Entity to Response DTO conversion
+    private TaskResponse convertToResponse(Task task) {
+
+        TaskResponse response = new TaskResponse();
+
+        response.setId(task.getId());
+        response.setTitle(task.getTitle());
+        response.setDescription(task.getDescription());
+        response.setStatus(task.getStatus());
+        response.setPriority(task.getPriority());
+        response.setCreatedAt(task.getCreatedAt());
+        response.setUpdatedAt(task.getUpdatedAt());
+
+        return response;
     }
 }
