@@ -26,6 +26,15 @@ import com.taskmanager.api.entity.TaskPriority;
 import com.taskmanager.api.entity.TaskStatus;
 import com.taskmanager.api.service.TaskService;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.mockito.ArgumentMatchers.any;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+
 import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(TaskController.class)
@@ -164,5 +173,69 @@ class TaskControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
+    }
+    
+    @Test
+    void searchTasksByTitle_ShouldReturnMatchingTasks() throws Exception {
+
+        TaskResponse response = new TaskResponse();
+        response.setId(1L);
+        response.setTitle("Learn Java");
+        response.setStatus(TaskStatus.TODO);
+
+        when(taskService.searchTasksByTitle("java"))
+                .thenReturn(List.of(response));
+
+        mockMvc.perform(get("/api/tasks/search")
+                .param("title", "java"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].title").value("Learn Java"));
+    }
+    
+    @Test
+    void filterTasksByStatus_ShouldReturnMatchingTasks() throws Exception {
+
+        TaskResponse response = new TaskResponse();
+        response.setId(1L);
+        response.setTitle("Learn Java");
+        response.setStatus(TaskStatus.TODO);
+
+        when(taskService.filterTasksByStatus(TaskStatus.TODO))
+                .thenReturn(List.of(response));
+
+        mockMvc.perform(get("/api/tasks/filter")
+                .param("status", "TODO"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].status").value("TODO"));
+    }
+    
+    @Test
+    void getTasksWithPagination_ShouldReturnPaginatedTasks() throws Exception {
+
+        TaskResponse response = new TaskResponse();
+        response.setId(1L);
+        response.setTitle("Learn Java");
+        response.setStatus(TaskStatus.TODO);
+
+        Pageable pageable = PageRequest.of(0, 5, Sort.by("title").ascending());
+
+        Page<TaskResponse> page = new PageImpl<>(
+                List.of(response),
+                pageable,
+                1
+        );
+
+        when(taskService.getAllTasks(any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/tasks/page")
+                .param("page", "0")
+                .param("size", "5")
+                .param("sortBy", "title")
+                .param("direction", "asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].title").value("Learn Java"))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1));
     }
 }

@@ -2,12 +2,15 @@ package com.taskmanager.api.service;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.taskmanager.api.dto.TaskRequest;
 import com.taskmanager.api.dto.TaskResponse;
 import com.taskmanager.api.entity.Task;
+import com.taskmanager.api.entity.TaskStatus;
 import com.taskmanager.api.exception.TaskNotFoundException;
 import com.taskmanager.api.repository.TaskRepository;
 
@@ -83,6 +86,18 @@ public class TaskServiceImpl implements TaskService {
 
         taskRepository.delete(existingTask);
     }
+    
+    
+    @Override
+    @Transactional(readOnly = true)
+    public List<TaskResponse> searchTasksByTitle(String title) {
+
+        return taskRepository.findByTitleContainingIgnoreCase(title)
+                .stream()
+                .map(this::convertToResponse)
+                .toList();
+    }
+    
 
     // Entity to Response DTO conversion
     private TaskResponse convertToResponse(Task task) {
@@ -99,4 +114,25 @@ public class TaskServiceImpl implements TaskService {
 
         return response;
     }
+    
+    
+    @Override
+    @Transactional(readOnly = true)
+    public List<TaskResponse> filterTasksByStatus(TaskStatus status) {
+
+        return taskRepository.findByStatus(status)
+                .stream()
+                .map(this::convertToResponse)
+                .toList();
+    }
+    
+    
+    @Override
+    @Transactional(readOnly = true)
+    public Page<TaskResponse> getAllTasks(Pageable pageable) {
+
+        return taskRepository.findAll(pageable)
+                .map(this::convertToResponse);
+    }
+
 }

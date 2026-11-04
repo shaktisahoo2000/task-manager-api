@@ -1,7 +1,15 @@
 package com.taskmanager.api.service;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Optional;
@@ -9,9 +17,16 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import com.taskmanager.api.dto.TaskRequest;
 import com.taskmanager.api.dto.TaskResponse;
@@ -50,6 +65,8 @@ class TaskServiceImplTest {
         task.setPriority(TaskPriority.HIGH);
     }
 
+    // 1. Create Task
+
     @Test
     void createTask_shouldReturnTaskResponse() {
 
@@ -64,6 +81,8 @@ class TaskServiceImplTest {
         verify(taskRepository, times(1)).save(any(Task.class));
     }
 
+    // 2. Get All Tasks
+
     @Test
     void getAllTasks_shouldReturnTaskList() {
 
@@ -74,6 +93,8 @@ class TaskServiceImplTest {
         assertEquals(1, response.size());
         assertEquals("Learn Spring Boot", response.get(0).getTitle());
     }
+
+    // 3. Get Task By ID
 
     @Test
     void getTaskById_shouldReturnTaskResponse() {
@@ -86,6 +107,8 @@ class TaskServiceImplTest {
         assertEquals(1L, response.getId());
     }
 
+    // 4. Get Task By ID - Not Found
+
     @Test
     void getTaskById_shouldThrowExceptionWhenTaskNotFound() {
 
@@ -95,13 +118,17 @@ class TaskServiceImplTest {
                 () -> taskService.getTaskById(99L));
     }
 
+    // 5. Update Task
+
     @Test
     void updateTask_shouldReturnUpdatedTaskResponse() {
 
         request.setTitle("Learn Microservices");
 
         when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
-        when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        when(taskRepository.save(any(Task.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         TaskResponse response = taskService.updateTask(1L, request);
 
@@ -109,6 +136,8 @@ class TaskServiceImplTest {
 
         verify(taskRepository).save(any(Task.class));
     }
+
+    // 6. Update Task - Not Found
 
     @Test
     void updateTask_shouldThrowExceptionWhenTaskNotFound() {
@@ -118,6 +147,8 @@ class TaskServiceImplTest {
         assertThrows(TaskNotFoundException.class,
                 () -> taskService.updateTask(99L, request));
     }
+
+    // 7. Delete Task
 
     @Test
     void deleteTask_shouldDeleteTaskSuccessfully() {
@@ -129,6 +160,8 @@ class TaskServiceImplTest {
         verify(taskRepository, times(1)).delete(task);
     }
 
+    // 8. Delete Task - Not Found
+
     @Test
     void deleteTask_shouldThrowExceptionWhenTaskNotFound() {
 
@@ -138,5 +171,109 @@ class TaskServiceImplTest {
                 () -> taskService.deleteTask(99L));
 
         verify(taskRepository, never()).delete(any(Task.class));
+    }
+
+    // 9. Search Tasks By Title
+
+    @Test
+    void searchTasksByTitle_ShouldReturnMatchingTasks() {
+
+        Task testTask = new Task();
+        testTask.setId(1L);
+        testTask.setTitle("Learn Java");
+        testTask.setDescription("Practice Java concepts");
+        testTask.setStatus(TaskStatus.TODO);
+        testTask.setPriority(TaskPriority.MEDIUM);
+
+        when(taskRepository.findByTitleContainingIgnoreCase("java"))
+                .thenReturn(List.of(testTask));
+
+        List<TaskResponse> result = taskService.searchTasksByTitle("java");
+
+        assertEquals(1, result.size());
+        assertEquals("Learn Java", result.get(0).getTitle());
+
+        verify(taskRepository).findByTitleContainingIgnoreCase("java");
+    }
+
+    // 10. Search Tasks - Empty Result
+
+    @Test
+    void searchTasksByTitle_ShouldReturnEmptyList() {
+
+        when(taskRepository.findByTitleContainingIgnoreCase("python"))
+                .thenReturn(List.of());
+
+        List<TaskResponse> result = taskService.searchTasksByTitle("python");
+
+        assertTrue(result.isEmpty());
+    }
+
+    // 11. Filter Tasks By Status
+
+    @Test
+    void filterTasksByStatus_ShouldReturnMatchingTasks() {
+
+        Task testTask = new Task();
+        testTask.setId(1L);
+        testTask.setTitle("Learn Java");
+        testTask.setDescription("Practice Java concepts");
+        testTask.setStatus(TaskStatus.TODO);
+        testTask.setPriority(TaskPriority.MEDIUM);
+
+        when(taskRepository.findByStatus(TaskStatus.TODO))
+                .thenReturn(List.of(testTask));
+
+        List<TaskResponse> result = taskService.filterTasksByStatus(TaskStatus.TODO);
+
+        assertEquals(1, result.size());
+        assertEquals(TaskStatus.TODO, result.get(0).getStatus());
+    }
+
+    // 12. Filter Tasks - Empty Result
+
+    @Test
+    void filterTasksByStatus_ShouldReturnEmptyList() {
+
+        when(taskRepository.findByStatus(TaskStatus.COMPLETED))
+                .thenReturn(List.of());
+
+        List<TaskResponse> result =
+                taskService.filterTasksByStatus(TaskStatus.COMPLETED);
+
+        assertTrue(result.isEmpty());
+    }
+
+    // 13. Pagination and Sorting
+
+    @Test
+    void getAllTasksWithPagination_ShouldReturnPaginatedTasks() {
+
+        Task testTask = new Task();
+        testTask.setId(1L);
+        testTask.setTitle("Learn Java");
+        testTask.setDescription("Practice Java concepts");
+        testTask.setStatus(TaskStatus.TODO);
+        testTask.setPriority(TaskPriority.MEDIUM);
+
+        Pageable pageable = PageRequest.of(
+                0, 5, Sort.by("title").ascending()
+        );
+
+        Page<Task> taskPage = new PageImpl<>(
+                List.of(testTask),
+                pageable,
+                1
+        );
+
+        when(taskRepository.findAll(pageable)).thenReturn(taskPage);
+
+        Page<TaskResponse> result = taskService.getAllTasks(pageable);
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals(1, result.getTotalPages());
+        assertEquals("Learn Java", result.getContent().get(0).getTitle());
+
+        verify(taskRepository).findAll(pageable);
     }
 }
